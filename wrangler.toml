@@ -1,8 +1,5 @@
-# Cloudflare Workers static assets
-# Deploy: npx wrangler deploy
+# Optional: CLI deploy with `npx wrangler pages deploy .`
+# Git-connected Cloudflare Pages should use dashboard settings below.
 name = "habits"
 compatibility_date = "2026-07-24"
-
-[assets]
-directory = "."
-not_found_handling = "single-page-application"
+pages_build_output_dir = "."
