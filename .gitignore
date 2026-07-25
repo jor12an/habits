@@ -1,0 +1,10 @@
+node_modules/
+.wrangler/
+.DS_Store
+dist/
+*.log
+.dev.vars
+*.zip
+cloudflare-upload/
+.idea/
+.vscode/

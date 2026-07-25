@@ -1,0 +1,16 @@
+{
+  "name": "habits",
+  "version": "1.2.0",
+  "description": "Habits — private mobile-first habit tracker PWA.",
+  "type": "module",
+  "scripts": {
+    "start": "python -m http.server 8080",
+    "dev": "python -m http.server 8080",
+    "deploy": "wrangler deploy"
+  },
+  "keywords": ["habit-tracker", "pwa", "local-first"],
+  "license": "MIT",
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

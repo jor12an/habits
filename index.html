@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0d0d0f" />
+  <meta name="description" content="Habits — a private, mobile-first habit tracker. Local only, no ads." />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Habits" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+  <link rel="icon" href="./icons/icon-192.png" />
+  <link rel="stylesheet" href="./styles.css" />
+  <title>Habits</title>
+</head>
+<body>
+  <div id="app">
+    <main id="view-home" class="view active">
+      <header class="topbar">
+        <button type="button" class="icon-btn" id="btnAdd" aria-label="Add habit">+</button>
+        <h1 class="topbar-title">Habits</h1>
+        <div class="topbar-actions">
+          <button type="button" class="icon-btn" id="btnSort" aria-label="Sort">⇅</button>
+          <button type="button" class="icon-btn" id="btnMenu" aria-label="Menu">⋯</button>
+        </div>
+      </header>
+      <!-- Two-column board: names fixed, days scroll sideways -->
+      <div class="board" id="board">
+        <div class="col-names" id="colNames"></div>
+        <div class="col-days" id="colDays">
+          <div class="days-track" id="daysTrack"></div>
+        </div>
+      </div>
+      <div class="empty-state" id="emptyState" hidden>
+        <h2>No habits yet</h2>
+        <p>Tap <strong>+</strong> to create your first habit. Scroll days sideways; names stay put.</p>
+        <button type="button" class="btn-primary" id="emptyAddBtn">Create a habit</button>
+      </div>
+    </main>
+
+    <section id="view-detail" class="view" hidden>
+      <header class="topbar">
+        <button type="button" class="icon-btn btn-back" id="btnBack" aria-label="Back">←</button>
+        <h1 class="topbar-title" id="detailTitle">Habit</h1>
+        <button type="button" class="icon-btn" id="btnEdit" aria-label="Edit">Edit</button>
+      </header>
+      <div class="detail-body" id="detailBody"></div>
+    </section>
+  </div>
+
+  <div class="sheet-backdrop" id="sortBackdrop" hidden></div>
+  <div class="sheet sheet-sm" id="sortSheet" hidden role="dialog" aria-modal="true">
+    <div class="sheet-handle"></div>
+    <h2 class="sheet-title">Sort habits</h2>
+    <div class="menu-list" id="sortOptions">
+      <button type="button" data-sort="manual" class="menu-item active">Custom order</button>
+      <button type="button" data-sort="score" class="menu-item">Strength score</button>
+      <button type="button" data-sort="name" class="menu-item">Name (A–Z)</button>
+      <button type="button" data-sort="color" class="menu-item">Color</button>
+      <button type="button" data-sort="created" class="menu-item">Newest first</button>
+    </div>
+    <p class="sheet-hint">With custom order, use ☰ to drag rows.</p>
+  </div>
+
+  <div class="sheet-backdrop" id="menuBackdrop" hidden></div>
+  <div class="sheet sheet-sm" id="menuSheet" hidden role="dialog" aria-modal="true">
+    <div class="sheet-handle"></div>
+    <h2 class="sheet-title">More</h2>
+    <div class="menu-list">
+      <button type="button" class="menu-item" id="btnExport">Export data</button>
+      <button type="button" class="menu-item" id="btnImport">Import data</button>
+      <button type="button" class="menu-item" id="btnTheme">Toggle light / dark</button>
+      <button type="button" class="menu-item" id="btnHelp">How scores work</button>
+    </div>
+    <input type="file" id="importFile" accept="application/json,.json" hidden />
+  </div>
+
+  <div class="sheet-backdrop" id="sheetBackdrop" hidden></div>
+  <div class="sheet" id="habitSheet" hidden role="dialog" aria-modal="true">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <h2 id="sheetTitle">New habit</h2>
+      <button type="button" class="icon-btn" id="sheetClose" aria-label="Close">×</button>
+    </div>
+    <div class="sheet-body">
+      <label class="field-label">Name</label>
+      <input type="text" id="fName" class="field-input" placeholder="e.g. Drink 1.5L of water" maxlength="48" autocomplete="off" />
+
+      <label class="field-label">Color</label>
+      <div class="color-picker" id="colorPicker"></div>
+
+      <label class="field-label">Type</label>
+      <div class="segmented" id="typeSeg">
+        <button type="button" data-type="basic" class="seg active">Basic</button>
+        <button type="button" data-type="progressive" class="seg">Progressive</button>
+      </div>
+      <p class="field-note" id="typeNote">One check per scheduled day.</p>
+
+      <div id="goalBlock" hidden>
+        <label class="field-label">Daily target <span class="field-hint">e.g. 8 glasses</span></label>
+        <div class="stepper">
+          <button type="button" id="goalMinus" class="step-btn">−</button>
+          <span id="goalVal" class="step-val">1</span>
+          <button type="button" id="goalPlus" class="step-btn">+</button>
+        </div>
+      </div>
+
+      <label class="field-label">Schedule</label>
+      <div class="days-picker" id="daysPicker"></div>
+      <p class="field-note">Score only counts these weekdays.</p>
+    </div>
+    <div class="sheet-foot">
+      <button type="button" class="btn-danger" id="deleteBtn" hidden>Delete</button>
+      <button type="button" class="btn-primary" id="saveBtn">Save</button>
+    </div>
+  </div>
+
+  <div class="sheet-backdrop" id="helpBackdrop" hidden></div>
+  <div class="sheet" id="helpSheet" hidden role="dialog" aria-modal="true">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <h2>Habit strength score</h2>
+      <button type="button" class="icon-btn" id="helpClose" aria-label="Close">×</button>
+    </div>
+    <div class="sheet-body help-copy" id="helpBody"></div>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+  <script src="./app.js"></script>
+</body>
+</html>
