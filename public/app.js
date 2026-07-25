@@ -261,21 +261,30 @@
 
     // left corner + name rows
     names.appendChild(el('div', 'corner'));
-    habits.forEach((h) => {
+    const canReorder = state.sort === 'manual';
+    habits.forEach((h, idx) => {
       const s = strengthOf(h);
       const row = el('div', 'name-row');
       row.style.setProperty('--hc', h.color);
       row.dataset.id = h.id;
       row.innerHTML = `
-        <span class="drag" title="Drag to reorder" aria-label="Reorder">☰</span>
+        <button type="button" class="drag" title="Drag to reorder" aria-label="Reorder" ${canReorder ? '' : 'hidden'}>☰</button>
         <span class="dot" style="background:${h.color}"></span>
         <span class="label">
           <span class="nm">${escapeHtml(h.name)}</span>
           <span class="score"><strong>${s.score}</strong> · ${s.stage}</span>
+        </span>
+        <span class="reorder" ${canReorder ? '' : 'hidden'}>
+          <button type="button" class="move-up" aria-label="Move up" ${idx === 0 ? 'disabled' : ''}>▲</button>
+          <button type="button" class="move-down" aria-label="Move down" ${idx === habits.length - 1 ? 'disabled' : ''}>▼</button>
         </span>`;
       row.querySelector('.label').onclick = () => openDetail(h.id);
       row.querySelector('.dot').onclick = () => openDetail(h.id);
-      setupDrag(row, h.id);
+      if (canReorder) {
+        row.querySelector('.move-up').onclick = (e) => { e.stopPropagation(); moveHabit(h.id, -1); };
+        row.querySelector('.move-down').onclick = (e) => { e.stopPropagation(); moveHabit(h.id, 1); };
+        setupDrag(row, h.id);
+      }
       names.appendChild(row);
     });
 
@@ -289,9 +298,10 @@
     });
     track.appendChild(heads);
 
-    // cell rows
+    // cell rows (data-id keeps them aligned with name reorder)
     habits.forEach((h) => {
       const row = el('div', 'cell-row');
+      row.dataset.id = h.id;
       keys.forEach((k) => {
         const m = markHTML(h, k);
         const btn = el('button', 'mark-cell' + (m.full ? ' full' : ''));
@@ -382,50 +392,101 @@
     days.addEventListener('pointercancel', endDrag);
   }
 
+  /** Move habit up (-1) or down (+1). Forces custom sort so order sticks. */
+  function moveHabit(id, dir) {
+    state.sort = 'manual';
+    const list = state.habits.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    const i = list.findIndex(h => h.id === id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= list.length) return;
+    const tmp = list[i];
+    list[i] = list[j];
+    list[j] = tmp;
+    list.forEach((h, idx) => { h.order = idx; });
+    state.habits = list;
+    save();
+    render();
+  }
+
+  /**
+   * Drag reorder without full re-render mid-gesture (that killed pointer capture on mobile).
+   * Reorders name rows + matching cell rows in the DOM, commits order on pointerup.
+   */
   function setupDrag(nameEl, id) {
     const handle = nameEl.querySelector('.drag');
-    if (state.sort !== 'manual') {
-      handle.style.visibility = 'hidden';
-      return;
-    }
+    if (!handle || state.sort !== 'manual') return;
+
     handle.addEventListener('pointerdown', (e) => {
+      if (e.button != null && e.button !== 0) return;
       e.preventDefault();
       e.stopPropagation();
       dragId = id;
       nameEl.classList.add('dragging');
-      handle.setPointerCapture(e.pointerId);
+      try { handle.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+
+      let lastSwapKey = '';
       const onMove = (ev) => {
+        if (dragId !== id) return;
+        ev.preventDefault();
         const under = document.elementFromPoint(ev.clientX, ev.clientY);
         const row = under && under.closest('.name-row');
         if (!row || row.dataset.id === dragId) return;
         const before = ev.clientY < row.getBoundingClientRect().top + row.offsetHeight / 2;
-        reorderRelative(dragId, row.dataset.id, before);
+        const swapKey = row.dataset.id + (before ? 'b' : 'a');
+        if (swapKey === lastSwapKey) return;
+        lastSwapKey = swapKey;
+        moveRowInDom(dragId, row.dataset.id, before);
       };
-      const onUp = () => {
+      const onUp = (ev) => {
         nameEl.classList.remove('dragging');
-        try { handle.releasePointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+        try { handle.releasePointerCapture(ev.pointerId); } catch (_) { /* ignore */ }
         handle.removeEventListener('pointermove', onMove);
         handle.removeEventListener('pointerup', onUp);
+        handle.removeEventListener('pointercancel', onUp);
+        commitOrderFromDom();
         dragId = null;
-        save();
         render();
       };
       handle.addEventListener('pointermove', onMove);
       handle.addEventListener('pointerup', onUp);
+      handle.addEventListener('pointercancel', onUp);
     });
   }
 
-  function reorderRelative(fromId, toId, before) {
-    const list = state.habits.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-    const from = list.findIndex(h => h.id === fromId);
-    if (from < 0) return;
-    const [item] = list.splice(from, 1);
-    let to = list.findIndex(h => h.id === toId);
-    if (to < 0) return;
-    list.splice(before ? to : to + 1, 0, item);
-    list.forEach((h, i) => { h.order = i; });
-    state.habits = list;
-    render();
+  function moveRowInDom(fromId, toId, before) {
+    const names = $('#colNames');
+    const track = $('#daysTrack');
+    const nameFrom = names.querySelector(`.name-row[data-id="${fromId}"]`);
+    const nameTo = names.querySelector(`.name-row[data-id="${toId}"]`);
+    const cellFrom = track.querySelector(`.cell-row[data-id="${fromId}"]`);
+    const cellTo = track.querySelector(`.cell-row[data-id="${toId}"]`);
+    if (!nameFrom || !nameTo) return;
+    if (before) names.insertBefore(nameFrom, nameTo);
+    else names.insertBefore(nameFrom, nameTo.nextSibling);
+    if (cellFrom && cellTo) {
+      if (before) track.insertBefore(cellFrom, cellTo);
+      else track.insertBefore(cellFrom, cellTo.nextSibling);
+    }
+  }
+
+  function commitOrderFromDom() {
+    const ids = [...$('#colNames').querySelectorAll('.name-row')].map(r => r.dataset.id);
+    const byId = Object.fromEntries(state.habits.map(h => [h.id, h]));
+    const ordered = ids.map((id, i) => {
+      const h = byId[id];
+      if (h) h.order = i;
+      return h;
+    }).filter(Boolean);
+    // keep any orphan habits at end
+    state.habits.forEach((h) => {
+      if (!ids.includes(h.id)) {
+        h.order = ordered.length;
+        ordered.push(h);
+      }
+    });
+    state.habits = ordered;
+    state.sort = 'manual';
+    save();
   }
 
   function toggleCell(h, key) {

@@ -15,7 +15,7 @@
   --radius: 16px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --name-w: 150px;
+  --name-w: 168px;
   --day-w: 58px;
   --head-h: 52px;
   --row-h: 54px;
@@ -36,7 +36,11 @@
   --shadow: 0 8px 28px rgba(0, 0, 0, 0.08);
 }
 
-* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
 html, body { margin: 0; padding: 0; height: 100%; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -44,10 +48,16 @@ body {
   color: var(--text);
   overscroll-behavior: none;
   -webkit-font-smoothing: antialiased;
+  -webkit-user-select: none;
   user-select: none;
 }
 button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; padding: 0; }
-input { font-family: inherit; }
+input, textarea {
+  font-family: inherit;
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
 
 @media (min-width: 600px) {
   body {
@@ -227,8 +237,8 @@ input { font-family: inherit; }
   height: var(--row-h);
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 8px 0 6px;
+  gap: 6px;
+  padding: 0 4px 0 4px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-row);
 }
@@ -236,14 +246,23 @@ input { font-family: inherit; }
 .name-row:active { background: var(--bg-soft); }
 .name-row .drag {
   color: var(--text-faint);
-  font-size: 13px;
-  padding: 10px 2px;
+  font-size: 16px;
+  width: 28px;
+  height: 44px;
+  display: grid;
+  place-items: center;
   touch-action: none;
   flex-shrink: 0;
-  opacity: 0.5;
+  opacity: 0.65;
   cursor: grab;
+  border-radius: 8px;
 }
-.name-row.dragging { opacity: 0.4; }
+.name-row .drag:active { background: var(--bg-soft); opacity: 1; cursor: grabbing; }
+.name-row.dragging {
+  opacity: 0.55;
+  background: var(--bg-soft) !important;
+  z-index: 2;
+}
 .name-row .dot {
   width: 10px;
   height: 10px;
@@ -256,6 +275,33 @@ input { font-family: inherit; }
   display: flex;
   flex-direction: column;
   gap: 2px;
+  cursor: pointer;
+}
+.name-row .reorder {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.name-row .reorder button {
+  width: 28px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--bg-soft);
+  color: var(--text-soft);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+}
+.name-row .reorder button:active { background: var(--accent); color: #fff; }
+.name-row .reorder button:disabled { opacity: 0.25; }
+.reorder-hint {
+  font-size: 11px;
+  color: var(--text-faint);
+  padding: 6px 10px 0;
+  text-align: center;
 }
 .name-row .nm {
   font-size: 13px;
