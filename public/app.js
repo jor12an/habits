@@ -232,6 +232,37 @@
     return keys;
   }
 
+  /** % of scheduled habits completed on a given day. */
+  function dayCompletion(key) {
+    let due = 0, done = 0;
+    state.habits.forEach((h) => {
+      if (!isScheduled(h, key)) return;
+      due++;
+      if (isComplete(h, key)) done++;
+    });
+    if (due === 0) return { due: 0, done: 0, pct: 0, none: true };
+    return { due, done, pct: Math.round((done / due) * 100), none: false };
+  }
+
+  /** SVG ring around the day number (r=13, circ≈81.68). */
+  function dayRingHTML(pct, none) {
+    const r = 13;
+    const c = 2 * Math.PI * r;
+    const offset = none ? c : c * (1 - Math.min(1, Math.max(0, pct / 100)));
+    let cls = 'ring-prog';
+    if (none || pct <= 0) cls += ' empty';
+    else if (pct >= 100) cls += ' full';
+    else cls += ' partial';
+    return `<span class="day-ring" aria-hidden="true">
+      <svg viewBox="0 0 30 30">
+        <circle class="ring-track" cx="15" cy="15" r="${r}"></circle>
+        <circle class="ring-prog ${cls}" cx="15" cy="15" r="${r}"
+          stroke-dasharray="${c.toFixed(2)}" stroke-dashoffset="${offset.toFixed(2)}"></circle>
+      </svg>
+      <span class="dnum"></span>
+    </span>`;
+  }
+
   function render() {
     applyTheme();
     const habits = sortedHabits();
@@ -241,6 +272,11 @@
     if (habits.length === 0) {
       empty.hidden = false;
       board.hidden = true;
+      // clear board so no grey/black split flashes
+      const names = $('#colNames');
+      const track = $('#daysTrack');
+      if (names) names.innerHTML = '';
+      if (track) track.innerHTML = '';
       return;
     }
     empty.hidden = true;
@@ -264,13 +300,16 @@
     names.appendChild(corner);
 
     const canReorder = state.sort === 'manual';
-    habits.forEach((h) => {
+    habits.forEach((h, idx) => {
       const s = strengthOf(h);
       const row = el('div', 'name-row');
       row.style.setProperty('--hc', h.color);
       row.dataset.id = h.id;
       row.innerHTML = `
-        <button type="button" class="drag" title="Drag to reorder" aria-label="Reorder" ${canReorder ? '' : 'hidden'}>☰</button>
+        <span class="reorder" ${canReorder ? '' : 'hidden'}>
+          <button type="button" class="move-up" aria-label="Move up" ${idx === 0 ? 'disabled' : ''}>▲</button>
+          <button type="button" class="move-down" aria-label="Move down" ${idx === habits.length - 1 ? 'disabled' : ''}>▼</button>
+        </span>
         <span class="label">
           <span class="nm">${escapeHtml(h.name)}</span>
           <span class="meta">
@@ -279,15 +318,23 @@
           </span>
         </span>`;
       row.querySelector('.label').onclick = () => openDetail(h.id);
-      if (canReorder) setupDrag(row, h.id);
+      if (canReorder) {
+        row.querySelector('.move-up').onclick = (e) => { e.stopPropagation(); moveHabit(h.id, -1); };
+        row.querySelector('.move-down').onclick = (e) => { e.stopPropagation(); moveHabit(h.id, 1); };
+      }
       names.appendChild(row);
     });
 
     const heads = el('div', 'day-heads');
     keys.forEach((k) => {
       const d = dateFromKey(k);
-      const cell = el('div', 'day-head' + (k === today ? ' today' : ''));
-      cell.innerHTML = `<span class="dow">${DOW_TINY[d.getDay()]}</span><span class="dnum">${d.getDate()}</span>`;
+      const dc = dayCompletion(k);
+      const cell = el('div', 'day-head' + (k === today ? ' today' : '') + (dc.none ? ' none' : ''));
+      cell.title = dc.none
+        ? `${k}: nothing scheduled`
+        : `${k}: ${dc.done}/${dc.due} done (${dc.pct}%)`;
+      cell.innerHTML = `<span class="dow">${DOW_TINY[d.getDay()]}</span>${dayRingHTML(dc.pct, dc.none)}`;
+      cell.querySelector('.dnum').textContent = String(d.getDate());
       heads.appendChild(cell);
     });
     track.appendChild(heads);
@@ -399,86 +446,20 @@
     toast('All habits deleted');
   }
 
-  /**
-   * Drag reorder: DOM only during gesture (no full re-render mid-drag),
-   * then commit order on pointerup.
-   */
-  let dragId = null;
-
-  function setupDrag(nameEl, id) {
-    const handle = nameEl.querySelector('.drag');
-    if (!handle || state.sort !== 'manual') return;
-
-    handle.addEventListener('pointerdown', (e) => {
-      if (e.button != null && e.button !== 0) return;
-      e.preventDefault();
-      e.stopPropagation();
-      dragId = id;
-      nameEl.classList.add('dragging');
-      try { handle.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
-
-      let lastSwapKey = '';
-      const onMove = (ev) => {
-        if (dragId !== id) return;
-        ev.preventDefault();
-        const under = document.elementFromPoint(ev.clientX, ev.clientY);
-        const row = under && under.closest('.name-row');
-        if (!row || row.dataset.id === dragId) return;
-        const before = ev.clientY < row.getBoundingClientRect().top + row.offsetHeight / 2;
-        const swapKey = row.dataset.id + (before ? 'b' : 'a');
-        if (swapKey === lastSwapKey) return;
-        lastSwapKey = swapKey;
-        moveRowInDom(dragId, row.dataset.id, before);
-      };
-      const onUp = (ev) => {
-        nameEl.classList.remove('dragging');
-        try { handle.releasePointerCapture(ev.pointerId); } catch (_) { /* ignore */ }
-        handle.removeEventListener('pointermove', onMove);
-        handle.removeEventListener('pointerup', onUp);
-        handle.removeEventListener('pointercancel', onUp);
-        commitOrderFromDom();
-        dragId = null;
-        render();
-      };
-      handle.addEventListener('pointermove', onMove);
-      handle.addEventListener('pointerup', onUp);
-      handle.addEventListener('pointercancel', onUp);
-    });
-  }
-
-  function moveRowInDom(fromId, toId, before) {
-    const names = $('#colNames');
-    const track = $('#daysTrack');
-    const nameFrom = names.querySelector(`.name-row[data-id="${fromId}"]`);
-    const nameTo = names.querySelector(`.name-row[data-id="${toId}"]`);
-    const cellFrom = track.querySelector(`.cell-row[data-id="${fromId}"]`);
-    const cellTo = track.querySelector(`.cell-row[data-id="${toId}"]`);
-    if (!nameFrom || !nameTo) return;
-    if (before) names.insertBefore(nameFrom, nameTo);
-    else names.insertBefore(nameFrom, nameTo.nextSibling);
-    if (cellFrom && cellTo) {
-      if (before) track.insertBefore(cellFrom, cellTo);
-      else track.insertBefore(cellFrom, cellTo.nextSibling);
-    }
-  }
-
-  function commitOrderFromDom() {
-    const ids = [...$('#colNames').querySelectorAll('.name-row')].map((r) => r.dataset.id);
-    const byId = Object.fromEntries(state.habits.map((h) => [h.id, h]));
-    const ordered = ids.map((id, i) => {
-      const h = byId[id];
-      if (h) h.order = i;
-      return h;
-    }).filter(Boolean);
-    state.habits.forEach((h) => {
-      if (!ids.includes(h.id)) {
-        h.order = ordered.length;
-        ordered.push(h);
-      }
-    });
-    state.habits = ordered;
+  /** Move habit up (-1) or down (+1). Forces custom sort so order sticks. */
+  function moveHabit(id, dir) {
     state.sort = 'manual';
+    const list = state.habits.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    const i = list.findIndex((h) => h.id === id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= list.length) return;
+    const tmp = list[i];
+    list[i] = list[j];
+    list[j] = tmp;
+    list.forEach((h, idx) => { h.order = idx; });
+    state.habits = list;
     save();
+    render();
   }
 
   function toggleCell(h, key) {
@@ -877,7 +858,7 @@
   let lastTouchEnd = 0;
   document.addEventListener('touchend', (e) => {
     const t = e.target;
-    if (t && t.closest && t.closest('input, textarea, button, a, .drag, .mark-cell')) return;
+    if (t && t.closest && t.closest('input, textarea, button, a, .mark-cell, .reorder')) return;
     const now = Date.now();
     if (now - lastTouchEnd <= 300) e.preventDefault();
     lastTouchEnd = now;

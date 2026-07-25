@@ -18,7 +18,7 @@
   --day-w: 44px;
   --days-w: calc(var(--day-w) * 4); /* ~4 dates visible; more days scroll under */
   --score-w: 52px;
-  --head-h: 48px;
+  --head-h: 52px;
   --row-h: 52px;
 }
 
@@ -162,6 +162,7 @@ input, textarea {
   background: var(--bg);
   padding-bottom: calc(12px + var(--safe-bottom));
 }
+.board[hidden] { display: none !important; }
 
 .col-names {
   flex: 1;
@@ -169,7 +170,7 @@ input, textarea {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  background: var(--bg-elev);
+  background: var(--bg);
   border-right: 1px solid var(--border);
   z-index: 5;
   scrollbar-width: none;
@@ -236,7 +237,8 @@ input, textarea {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1px;
+  gap: 2px;
+  padding-top: 2px;
 }
 .day-head .dow {
   font-size: 9px;
@@ -246,22 +248,50 @@ input, textarea {
   line-height: 1;
   text-transform: uppercase;
 }
-.day-head .dnum {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-soft);
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
+/* Progress ring: arc = % of scheduled habits completed that day */
+.day-ring {
+  position: relative;
+  width: 30px;
+  height: 30px;
   display: grid;
   place-items: center;
+}
+.day-ring svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.day-ring .ring-track {
+  fill: none;
+  stroke: var(--bg-soft);
+  stroke-width: 2.5;
+}
+.day-ring .ring-prog {
+  fill: none;
+  stroke: var(--ok);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.25s ease;
+}
+.day-ring .ring-prog.partial { stroke: var(--accent); }
+.day-ring .ring-prog.empty { stroke: transparent; }
+.day-ring .ring-prog.full { stroke: var(--ok); }
+.day-head .dnum {
+  position: relative;
+  z-index: 1;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-soft);
   line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 .day-head.today .dow { color: var(--accent); }
-.day-head.today .dnum {
-  background: var(--accent);
-  color: #fff;
-}
+.day-head.today .dnum { color: var(--accent); }
+.day-head.today .ring-track { stroke: color-mix(in srgb, var(--accent) 35%, var(--bg-soft)); }
+.day-head.none .ring-track { stroke: transparent; }
+.day-head.none .dnum { color: var(--text-faint); opacity: 0.55; }
 
 /* name rows */
 .name-row {
@@ -269,31 +299,32 @@ input, textarea {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 0 6px 0 2px;
+  padding: 0 6px 0 4px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-row);
 }
 .name-row:nth-child(even) { background: var(--bg); }
 .name-row:active { background: var(--bg-soft); }
-.name-row.dragging {
-  opacity: 0.55;
-  background: var(--bg-soft) !important;
-  z-index: 2;
+.name-row .reorder {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex-shrink: 0;
 }
-.name-row .drag {
-  width: 28px;
-  height: 44px;
+.name-row .reorder button {
+  width: 24px;
+  height: 20px;
+  border-radius: 5px;
+  background: var(--bg-soft);
+  color: var(--text-soft);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
   display: grid;
   place-items: center;
-  flex-shrink: 0;
-  color: var(--text-faint);
-  font-size: 15px;
-  touch-action: none;
-  cursor: grab;
-  border-radius: 8px;
-  opacity: 0.7;
 }
-.name-row .drag:active { cursor: grabbing; background: var(--bg-soft); opacity: 1; }
+.name-row .reorder button:active { background: var(--accent); color: #fff; }
+.name-row .reorder button:disabled { opacity: 0.25; }
 .name-row .label {
   flex: 1;
   min-width: 0;
@@ -396,12 +427,20 @@ input, textarea {
 
 /* empty */
 .empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   text-align: center;
-  padding: 72px 28px;
+  padding: 48px 28px calc(48px + var(--safe-bottom));
   color: var(--text-soft);
+  background: var(--bg);
+  min-height: 0;
 }
+.empty-state[hidden] { display: none !important; }
 .empty-state h2 { color: var(--text); margin: 0 0 8px; font-size: 20px; }
-.empty-state p { margin: 0 0 22px; line-height: 1.5; font-size: 14px; }
+.empty-state p { margin: 0 0 22px; line-height: 1.5; font-size: 14px; max-width: 280px; }
 
 /* ---------- Detail ---------- */
 .detail-body {

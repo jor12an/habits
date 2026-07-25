@@ -4,7 +4,7 @@
  *  - false "Offline" shell after refresh
  * Only caches static assets (css/js/icons/manifest).
  */
-const CACHE = 'habits-v12';
+const CACHE = 'habits-v13';
 const PRECACHE = [
   './styles.css',
   './app.js',
