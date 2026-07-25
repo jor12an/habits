@@ -135,8 +135,7 @@ Habits/
 │   ├── sw.js
 │   ├── manifest.webmanifest
 │   ├── icons/
-│   ├── _headers
-│   └── _redirects
+│   └── _headers
 ├── package.json
 ├── wrangler.toml           assets.directory = ./public
 ├── LICENSE
