@@ -441,6 +441,13 @@ input, textarea {
 .empty-state[hidden] { display: none !important; }
 .empty-state h2 { color: var(--text); margin: 0 0 8px; font-size: 20px; }
 .empty-state p { margin: 0 0 22px; line-height: 1.5; font-size: 14px; max-width: 280px; }
+.empty-state .btn-primary {
+  flex: 0 0 auto;
+  align-self: center;
+  width: auto;
+  min-width: 0;
+  padding: 12px 20px;
+}
 
 /* ---------- Detail ---------- */
 .detail-body {
