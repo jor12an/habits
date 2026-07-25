@@ -11,7 +11,7 @@ This file is for your own reference. Nothing here needs to be uploaded.
 From this folder:
 
 ```bash
-python -m http.server 8080
+python -m http.server 8080 --directory public
 ```
 
 Open **http://127.0.0.1:8080/**
@@ -128,21 +128,24 @@ Demo seed (first empty run): flag `habits.seeded` in localStorage.
 
 ```
 Habits/
-├── index.html              App shell
-├── styles.css              Layout, board, sheets
-├── app.js                  State, score, grid, import/export
-├── sw.js                   Offline cache
-├── manifest.webmanifest    PWA manifest
-├── icons/                  App icons
-├── package.json            Optional scripts / wrangler
-├── wrangler.toml           Optional Cloudflare deploy
-├── LICENSE                 MIT
+├── public/                 ← only this folder is deployed
+│   ├── index.html
+│   ├── styles.css
+│   ├── app.js
+│   ├── sw.js
+│   ├── manifest.webmanifest
+│   ├── icons/
+│   ├── _headers
+│   └── _redirects
+├── package.json
+├── wrangler.toml           assets.directory = ./public
+├── LICENSE
 ├── .gitignore
-├── PROJECT.md              This file
-└── README.md               Short entry point
+├── PROJECT.md
+└── README.md
 ```
 
-No build step. No framework. Static files only.
+No build step. No framework. Static files only. Deploy never includes `node_modules`.
 
 ---
 

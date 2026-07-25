@@ -1,5 +1,9 @@
-# Optional: CLI deploy with `npx wrangler pages deploy .`
-# Git-connected Cloudflare Pages should use dashboard settings below.
+# Cloudflare Workers static assets — deploys ONLY ./public (never node_modules)
+# Dashboard deploy command should be: npx wrangler deploy
 name = "habits"
 compatibility_date = "2026-07-24"
-pages_build_output_dir = "."
+
+[assets]
+directory = "./public"
+not_found_handling = "single-page-application"
+# Do not bundle node_modules; assets dir is public/ only

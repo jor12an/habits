@@ -6,5 +6,8 @@ dist/
 .dev.vars
 *.zip
 cloudflare-upload/
+package-lock.json
+bun.lock
+bun.lockb
 .idea/
 .vscode/
