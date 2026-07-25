@@ -1,5 +1,5 @@
 /* Habits service worker — offline cache. Bump CACHE to invalidate. */
-const CACHE = 'habits-v8';
+const CACHE = 'habits-v9';
 const ASSETS = [
   './',
   './index.html',

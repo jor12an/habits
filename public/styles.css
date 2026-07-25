@@ -16,9 +16,10 @@
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --day-w: 44px;
-  --days-w: calc(var(--day-w) * 4);
-  --head-h: 44px;
-  --row-h: 48px;
+  --days-w: calc(var(--day-w) * 4); /* ~4 dates visible; more days scroll under */
+  --score-w: 52px;
+  --head-h: 48px;
+  --row-h: 52px;
 }
 
 :root[data-theme="light"] {
@@ -162,19 +163,18 @@ input, textarea {
   width: var(--days-w);
   min-width: var(--days-w);
   max-width: var(--days-w);
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  touch-action: pan-y;
+  touch-action: pan-x pan-y;
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
 .col-days::-webkit-scrollbar { width: 0; height: 0; display: none; }
 
 .days-track {
-  width: 100%;
   min-height: 100%;
+  width: max-content;
 }
 
 /* header cells */
@@ -187,34 +187,16 @@ input, textarea {
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 6px 0 8px;
-  gap: 4px;
+  justify-content: flex-end;
+  padding: 0 6px 0 4px;
 }
-.corner .win-nav {
-  display: flex;
-  gap: 2px;
-}
-.corner .win-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background: var(--bg-soft);
-  color: var(--text-soft);
-  font-size: 14px;
-  font-weight: 700;
-  display: grid;
-  place-items: center;
-}
-.corner .win-btn:active { background: var(--accent); color: #fff; }
-.corner .win-btn:disabled { opacity: 0.3; }
-.corner .win-label {
+.corner .score-hdr {
+  width: var(--score-w);
+  text-align: right;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-faint);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  letter-spacing: 0.2px;
 }
 
 .day-heads {
@@ -278,8 +260,8 @@ input, textarea {
   flex: 1;
   min-width: 0;
   display: flex;
-  align-items: baseline;
-  gap: 6px;
+  align-items: center;
+  gap: 8px;
   cursor: pointer;
 }
 .name-row .reorder {
@@ -307,22 +289,43 @@ input, textarea {
   min-width: 0;
   font-size: 14px;
   font-weight: 600;
-  line-height: 1.25;
-  /* allow up to 2 lines so more of the name shows */
+  line-height: 1.2;
+  max-height: calc(1.2em * 2);
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   overflow: hidden;
+  text-overflow: ellipsis;
   word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.name-row .meta {
+  flex-shrink: 0;
+  width: var(--score-w);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 1px;
+  line-height: 1.1;
 }
 .name-row .score {
-  flex-shrink: 0;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   color: var(--hc, var(--accent));
-  min-width: 1.6em;
   text-align: right;
+}
+.name-row .stage {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-faint);
+  text-align: right;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* day cells */
@@ -662,6 +665,7 @@ input, textarea {
 }
 .menu-item:active, .menu-item.active { background: var(--bg-soft); }
 .menu-item.active { color: var(--accent); }
+.menu-item.danger { color: var(--danger); }
 .help-copy {
   font-size: 14px;
   line-height: 1.55;

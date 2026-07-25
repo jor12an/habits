@@ -8,7 +8,7 @@
   const DOW_FULL = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
   const DOW_TINY = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
   const HISTORY_DAYS = 90;
-  const VISIBLE_DAYS = 4; // only 4 date columns on the main grid
+  const DAY_W = 44; // keep in sync with --day-w
   const HALF_LIFE = 14;
   const LALLY_DAYS = 66;
 
@@ -17,8 +17,7 @@
   let draft = null;
   let detailId = null;
   let scrollSyncing = false;
-  /** 0 = window ends on today; higher = earlier days */
-  let dayOffset = 0;
+  let scrolledOnce = false;
 
   // ---------- Persistence ----------
   function load() {
@@ -226,22 +225,11 @@
     return done ? { html: check, off: false, full: true } : { html: cross, off: false, full: false };
   }
 
-  function maxDayOffset() {
-    return Math.max(0, HISTORY_DAYS - VISIBLE_DAYS + 1);
-  }
-
-  /** 4-day window, oldest → newest. dayOffset 0 ends on today. */
+  /** Full history oldest → newest; ~4 columns visible, swipe for more (no scrollbar). */
   function dateKeys() {
     const keys = [];
-    for (let i = VISIBLE_DAYS - 1; i >= 0; i--) {
-      keys.push(keyFromOffset(-(dayOffset + i)));
-    }
+    for (let i = HISTORY_DAYS; i >= 0; i--) keys.push(keyFromOffset(-i));
     return keys;
-  }
-
-  function shiftDayWindow(delta) {
-    dayOffset = Math.max(0, Math.min(maxDayOffset(), dayOffset + delta));
-    render();
   }
 
   function render() {
@@ -264,22 +252,15 @@
     const track = $('#daysTrack');
     const days = $('#colDays');
     const prevTop = days.scrollTop;
+    const prevLeft = days.scrollLeft;
 
     names.innerHTML = '';
     track.innerHTML = '';
+    track.style.width = (keys.length * DAY_W) + 'px';
 
-    // corner: window nav + label
+    // "Score" header aligned with score column (rightmost in name area)
     const corner = el('div', 'corner');
-    const canPast = dayOffset < maxDayOffset();
-    const canFuture = dayOffset > 0;
-    corner.innerHTML = `
-      <span class="win-label">Score</span>
-      <span class="win-nav">
-        <button type="button" class="win-btn" id="winPast" aria-label="Earlier days" ${canPast ? '' : 'disabled'}>◀</button>
-        <button type="button" class="win-btn" id="winNext" aria-label="Later days" ${canFuture ? '' : 'disabled'}>▶</button>
-      </span>`;
-    corner.querySelector('#winPast').onclick = () => shiftDayWindow(1);
-    corner.querySelector('#winNext').onclick = () => shiftDayWindow(-1);
+    corner.innerHTML = `<span class="score-hdr">Score</span>`;
     names.appendChild(corner);
 
     const canReorder = state.sort === 'manual';
@@ -295,7 +276,10 @@
         </span>
         <span class="label">
           <span class="nm">${escapeHtml(h.name)}</span>
-          <span class="score">${s.score}</span>
+          <span class="meta">
+            <span class="score">${s.score}</span>
+            <span class="stage">${escapeHtml(s.stage)}</span>
+          </span>
         </span>`;
       row.querySelector('.label').onclick = () => openDetail(h.id);
       if (canReorder) {
@@ -305,7 +289,6 @@
       names.appendChild(row);
     });
 
-    // day headers (4 compact columns)
     const heads = el('div', 'day-heads');
     keys.forEach((k) => {
       const d = dateFromKey(k);
@@ -335,6 +318,12 @@
     });
 
     requestAnimationFrame(() => {
+      if (!scrolledOnce) {
+        days.scrollLeft = days.scrollWidth;
+        scrolledOnce = true;
+      } else {
+        days.scrollLeft = prevLeft;
+      }
       days.scrollTop = prevTop;
       names.scrollTop = prevTop;
     });
@@ -356,29 +345,37 @@
       scrollSyncing = false;
     }, { passive: true });
 
-    // Horizontal swipe on day columns shifts the 4-day window
-    let swipe = null;
+    // Mouse drag-to-scroll days (touch uses native pan-x)
+    let drag = null;
     days.addEventListener('pointerdown', (e) => {
-      if (e.button != null && e.button !== 0) return;
-      if (e.target.closest && e.target.closest('.mark-cell:not(:disabled)')) {
-        // allow mark taps; still track lightly for accidental swipes
-      }
-      swipe = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false };
+      if (e.pointerType === 'touch') return;
+      if (e.button !== 0) return;
+      const onMark = e.target.closest && e.target.closest('.mark-cell:not(:disabled)');
+      drag = {
+        id: e.pointerId,
+        x: e.clientX,
+        y: e.clientY,
+        left: days.scrollLeft,
+        top: days.scrollTop,
+        moved: false,
+        onMark: !!onMark,
+      };
     });
     days.addEventListener('pointermove', (e) => {
-      if (!swipe || swipe.id !== e.pointerId) return;
-      const dx = e.clientX - swipe.x;
-      const dy = e.clientY - swipe.y;
-      if (!swipe.moved && Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.2) {
-        swipe.moved = true;
-        // finger right → show earlier days
-        if (dx > 0) shiftDayWindow(1);
-        else shiftDayWindow(-1);
-      }
+      if (!drag || drag.id !== e.pointerId) return;
+      const dx = e.clientX - drag.x;
+      const dy = e.clientY - drag.y;
+      if (!drag.moved && Math.abs(dx) + Math.abs(dy) < 4) return;
+      if (drag.onMark && !drag.moved && Math.abs(dx) < 8) return;
+      drag.moved = true;
+      try { days.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+      days.scrollLeft = drag.left - dx;
+      days.scrollTop = drag.top - dy;
+      e.preventDefault();
     });
-    const endSwipe = (e) => {
-      if (!swipe || swipe.id !== e.pointerId) return;
-      if (swipe.moved) {
+    const endDrag = (e) => {
+      if (!drag || drag.id !== e.pointerId) return;
+      if (drag.moved) {
         const suppress = (ev) => {
           ev.stopPropagation();
           ev.preventDefault();
@@ -386,10 +383,26 @@
         };
         days.addEventListener('click', suppress, true);
       }
-      swipe = null;
+      drag = null;
     };
-    days.addEventListener('pointerup', endSwipe);
-    days.addEventListener('pointercancel', endSwipe);
+    days.addEventListener('pointerup', endDrag);
+    days.addEventListener('pointercancel', endDrag);
+  }
+
+  function deleteAllHabits() {
+    if (!state.habits.length) {
+      toast('No habits to delete');
+      return;
+    }
+    const n = state.habits.length;
+    if (!confirm(`Delete all ${n} habit${n === 1 ? '' : 's'} and their history? This cannot be undone.`)) return;
+    if (!confirm('Are you sure? Export first if you want a backup.')) return;
+    state.habits = [];
+    save();
+    closeDetail();
+    scrolledOnce = false;
+    render();
+    toast('All habits deleted');
   }
 
   /** Move habit up (-1) or down (+1). Forces custom sort so order sticks. */
@@ -641,7 +654,7 @@
         state.habits.forEach((h, i) => { if (h.order == null) h.order = i; });
         save();
         closeDetail();
-        dayOffset = 0;
+        scrolledOnce = false;
         render();
         toast('Imported');
       } catch (e) {
@@ -793,6 +806,7 @@
     };
     $('#btnTheme').onclick = () => { closeMenu(); toggleTheme(); };
     $('#btnHelp').onclick = () => { closeMenu(); openHelp(); };
+    $('#btnDeleteAll').onclick = () => { closeMenu(); deleteAllHabits(); };
     $('#helpClose').onclick = () => { $('#helpBackdrop').hidden = true; $('#helpSheet').hidden = true; };
     $('#helpBackdrop').onclick = () => { $('#helpBackdrop').hidden = true; $('#helpSheet').hidden = true; };
   }
