@@ -23,9 +23,11 @@
   <div id="app">
     <main id="view-home" class="view active">
       <header class="topbar">
-        <button type="button" class="icon-btn" id="btnAdd" aria-label="Add habit">+</button>
+        <div class="topbar-side left">
+          <button type="button" class="icon-btn" id="btnAdd" aria-label="Add habit">+</button>
+        </div>
         <h1 class="topbar-title">Habits</h1>
-        <div class="topbar-actions">
+        <div class="topbar-side right">
           <button type="button" class="icon-btn" id="btnSort" aria-label="Sort">⇅</button>
           <button type="button" class="icon-btn" id="btnMenu" aria-label="Menu">⋯</button>
         </div>
@@ -46,9 +48,13 @@
 
     <section id="view-detail" class="view" hidden>
       <header class="topbar">
-        <button type="button" class="icon-btn btn-back" id="btnBack" aria-label="Back">←</button>
+        <div class="topbar-side left">
+          <button type="button" class="icon-btn btn-back" id="btnBack" aria-label="Back">←</button>
+        </div>
         <h1 class="topbar-title" id="detailTitle">Habit</h1>
-        <button type="button" class="icon-btn" id="btnEdit" aria-label="Edit">Edit</button>
+        <div class="topbar-side right">
+          <button type="button" class="icon-btn" id="btnEdit" aria-label="Edit">Edit</button>
+        </div>
       </header>
       <div class="detail-body" id="detailBody"></div>
     </section>
@@ -65,7 +71,7 @@
       <button type="button" data-sort="color" class="menu-item">Color</button>
       <button type="button" data-sort="created" class="menu-item">Newest first</button>
     </div>
-    <p class="sheet-hint">Choose <strong>Custom order</strong>, then use ▲ ▼ on each row to reorder.</p>
+    <p class="sheet-hint">Choose <strong>Custom order</strong>, then drag ☰ to reorder.</p>
   </div>
 
   <div class="sheet-backdrop" id="menuBackdrop" hidden></div>

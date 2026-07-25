@@ -264,16 +264,13 @@
     names.appendChild(corner);
 
     const canReorder = state.sort === 'manual';
-    habits.forEach((h, idx) => {
+    habits.forEach((h) => {
       const s = strengthOf(h);
       const row = el('div', 'name-row');
       row.style.setProperty('--hc', h.color);
       row.dataset.id = h.id;
       row.innerHTML = `
-        <span class="reorder" ${canReorder ? '' : 'hidden'}>
-          <button type="button" class="move-up" aria-label="Move up" ${idx === 0 ? 'disabled' : ''}>▲</button>
-          <button type="button" class="move-down" aria-label="Move down" ${idx === habits.length - 1 ? 'disabled' : ''}>▼</button>
-        </span>
+        <button type="button" class="drag" title="Drag to reorder" aria-label="Reorder" ${canReorder ? '' : 'hidden'}>☰</button>
         <span class="label">
           <span class="nm">${escapeHtml(h.name)}</span>
           <span class="meta">
@@ -282,10 +279,7 @@
           </span>
         </span>`;
       row.querySelector('.label').onclick = () => openDetail(h.id);
-      if (canReorder) {
-        row.querySelector('.move-up').onclick = (e) => { e.stopPropagation(); moveHabit(h.id, -1); };
-        row.querySelector('.move-down').onclick = (e) => { e.stopPropagation(); moveHabit(h.id, 1); };
-      }
+      if (canReorder) setupDrag(row, h.id);
       names.appendChild(row);
     });
 
@@ -405,20 +399,86 @@
     toast('All habits deleted');
   }
 
-  /** Move habit up (-1) or down (+1). Forces custom sort so order sticks. */
-  function moveHabit(id, dir) {
+  /**
+   * Drag reorder: DOM only during gesture (no full re-render mid-drag),
+   * then commit order on pointerup.
+   */
+  let dragId = null;
+
+  function setupDrag(nameEl, id) {
+    const handle = nameEl.querySelector('.drag');
+    if (!handle || state.sort !== 'manual') return;
+
+    handle.addEventListener('pointerdown', (e) => {
+      if (e.button != null && e.button !== 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      dragId = id;
+      nameEl.classList.add('dragging');
+      try { handle.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+
+      let lastSwapKey = '';
+      const onMove = (ev) => {
+        if (dragId !== id) return;
+        ev.preventDefault();
+        const under = document.elementFromPoint(ev.clientX, ev.clientY);
+        const row = under && under.closest('.name-row');
+        if (!row || row.dataset.id === dragId) return;
+        const before = ev.clientY < row.getBoundingClientRect().top + row.offsetHeight / 2;
+        const swapKey = row.dataset.id + (before ? 'b' : 'a');
+        if (swapKey === lastSwapKey) return;
+        lastSwapKey = swapKey;
+        moveRowInDom(dragId, row.dataset.id, before);
+      };
+      const onUp = (ev) => {
+        nameEl.classList.remove('dragging');
+        try { handle.releasePointerCapture(ev.pointerId); } catch (_) { /* ignore */ }
+        handle.removeEventListener('pointermove', onMove);
+        handle.removeEventListener('pointerup', onUp);
+        handle.removeEventListener('pointercancel', onUp);
+        commitOrderFromDom();
+        dragId = null;
+        render();
+      };
+      handle.addEventListener('pointermove', onMove);
+      handle.addEventListener('pointerup', onUp);
+      handle.addEventListener('pointercancel', onUp);
+    });
+  }
+
+  function moveRowInDom(fromId, toId, before) {
+    const names = $('#colNames');
+    const track = $('#daysTrack');
+    const nameFrom = names.querySelector(`.name-row[data-id="${fromId}"]`);
+    const nameTo = names.querySelector(`.name-row[data-id="${toId}"]`);
+    const cellFrom = track.querySelector(`.cell-row[data-id="${fromId}"]`);
+    const cellTo = track.querySelector(`.cell-row[data-id="${toId}"]`);
+    if (!nameFrom || !nameTo) return;
+    if (before) names.insertBefore(nameFrom, nameTo);
+    else names.insertBefore(nameFrom, nameTo.nextSibling);
+    if (cellFrom && cellTo) {
+      if (before) track.insertBefore(cellFrom, cellTo);
+      else track.insertBefore(cellFrom, cellTo.nextSibling);
+    }
+  }
+
+  function commitOrderFromDom() {
+    const ids = [...$('#colNames').querySelectorAll('.name-row')].map((r) => r.dataset.id);
+    const byId = Object.fromEntries(state.habits.map((h) => [h.id, h]));
+    const ordered = ids.map((id, i) => {
+      const h = byId[id];
+      if (h) h.order = i;
+      return h;
+    }).filter(Boolean);
+    state.habits.forEach((h) => {
+      if (!ids.includes(h.id)) {
+        h.order = ordered.length;
+        ordered.push(h);
+      }
+    });
+    state.habits = ordered;
     state.sort = 'manual';
-    const list = state.habits.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-    const i = list.findIndex(h => h.id === id);
-    const j = i + dir;
-    if (i < 0 || j < 0 || j >= list.length) return;
-    const tmp = list[i];
-    list[i] = list[j];
-    list[j] = tmp;
-    list.forEach((h, idx) => { h.order = idx; });
-    state.habits = list;
     save();
-    render();
   }
 
   function toggleCell(h, key) {
@@ -813,9 +873,11 @@
 
   document.addEventListener('DOMContentLoaded', init);
 
-  // Disable double-tap zoom residual on some iOS versions
+  // Disable double-tap zoom (skip when interacting with controls)
   let lastTouchEnd = 0;
   document.addEventListener('touchend', (e) => {
+    const t = e.target;
+    if (t && t.closest && t.closest('input, textarea, button, a, .drag, .mark-cell')) return;
     const now = Date.now();
     if (now - lastTouchEnd <= 300) e.preventDefault();
     lastTouchEnd = now;
@@ -824,7 +886,9 @@
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
-        .then((reg) => { try { reg.update(); } catch (_) { /* ignore */ } })
+        .then((reg) => {
+          try { reg.update(); } catch (_) { /* ignore */ }
+        })
         .catch(() => {});
     });
   }
