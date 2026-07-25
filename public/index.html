@@ -25,7 +25,7 @@
           <button type="button" class="icon-btn" id="btnMenu" aria-label="Menu">⋯</button>
         </div>
       </header>
-      <!-- Two-column board: names fixed, days scroll sideways -->
+      <!-- Wide names + 4 compact day columns -->
       <div class="board" id="board">
         <div class="col-names" id="colNames"></div>
         <div class="col-days" id="colDays">
@@ -34,7 +34,7 @@
       </div>
       <div class="empty-state" id="emptyState" hidden>
         <h2>No habits yet</h2>
-        <p>Tap <strong>+</strong> to create your first habit. Scroll days sideways; names stay put.</p>
+        <p>Tap <strong>+</strong> to create your first habit. Use ◀ ▶ to shift the 4-day window.</p>
         <button type="button" class="btn-primary" id="emptyAddBtn">Create a habit</button>
       </div>
     </main>
@@ -60,7 +60,7 @@
       <button type="button" data-sort="color" class="menu-item">Color</button>
       <button type="button" data-sort="created" class="menu-item">Newest first</button>
     </div>
-    <p class="sheet-hint">Choose <strong>Custom order</strong>, then use ▲ ▼ or drag ☰ on each row.</p>
+    <p class="sheet-hint">Choose <strong>Custom order</strong>, then use ▲ ▼ on each row to reorder.</p>
   </div>
 
   <div class="sheet-backdrop" id="menuBackdrop" hidden></div>

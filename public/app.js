@@ -6,18 +6,19 @@
   const COLORS = ['#ff9f0a', '#0a84ff', '#ff453a', '#30d158', '#bf5af2', '#64d2ff', '#ffd60a', '#ff375f'];
   const DOW_SHORT = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
   const DOW_FULL = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+  const DOW_TINY = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
   const HISTORY_DAYS = 90;
+  const VISIBLE_DAYS = 4; // only 4 date columns on the main grid
   const HALF_LIFE = 14;
   const LALLY_DAYS = 66;
-  const DAY_W = 58; // keep in sync with --day-w
 
   let state = load();
   let editingId = null;
   let draft = null;
   let detailId = null;
-  let dragId = null;
   let scrollSyncing = false;
-  let scrolledOnce = false;
+  /** 0 = window ends on today; higher = earlier days */
+  let dayOffset = 0;
 
   // ---------- Persistence ----------
   function load() {
@@ -214,8 +215,8 @@
     const prog = progressFor(h, key);
     const done = isComplete(h, key);
     // Inline SVG so marks always paint (no font/glyph issues)
-    const check = `<svg class="mark-svg" viewBox="0 0 24 24" aria-label="Done" width="22" height="22"><path fill="none" stroke="#30d158" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>`;
-    const cross = `<svg class="mark-svg" viewBox="0 0 24 24" aria-label="Missed" width="20" height="20"><path fill="none" stroke="#8e8e93" stroke-width="2.5" stroke-linecap="round" d="M6 6l12 12M18 6L6 18"/></svg>`;
+    const check = `<svg class="mark-svg" viewBox="0 0 24 24" aria-label="Done" width="16" height="16"><path fill="none" stroke="#30d158" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>`;
+    const cross = `<svg class="mark-svg" viewBox="0 0 24 24" aria-label="Missed" width="15" height="15"><path fill="none" stroke="#8e8e93" stroke-width="2.5" stroke-linecap="round" d="M6 6l12 12M18 6L6 18"/></svg>`;
     if (h.type === 'progressive' && h.goal > 1) {
       if (prog <= 0) return { html: cross, off: false, full: false };
       if (done) return { html: check, off: false, full: true };
@@ -225,10 +226,22 @@
     return done ? { html: check, off: false, full: true } : { html: cross, off: false, full: false };
   }
 
+  function maxDayOffset() {
+    return Math.max(0, HISTORY_DAYS - VISIBLE_DAYS + 1);
+  }
+
+  /** 4-day window, oldest → newest. dayOffset 0 ends on today. */
   function dateKeys() {
     const keys = [];
-    for (let i = HISTORY_DAYS; i >= 0; i--) keys.push(keyFromOffset(-i));
+    for (let i = VISIBLE_DAYS - 1; i >= 0; i--) {
+      keys.push(keyFromOffset(-(dayOffset + i)));
+    }
     return keys;
+  }
+
+  function shiftDayWindow(delta) {
+    dayOffset = Math.max(0, Math.min(maxDayOffset(), dayOffset + delta));
+    render();
   }
 
   function render() {
@@ -250,17 +263,25 @@
     const names = $('#colNames');
     const track = $('#daysTrack');
     const days = $('#colDays');
-
-    // preserve scroll while re-rendering
-    const prevLeft = days.scrollLeft;
     const prevTop = days.scrollTop;
 
     names.innerHTML = '';
     track.innerHTML = '';
-    track.style.width = (keys.length * DAY_W) + 'px';
 
-    // left corner + name rows
-    names.appendChild(el('div', 'corner'));
+    // corner: window nav + label
+    const corner = el('div', 'corner');
+    const canPast = dayOffset < maxDayOffset();
+    const canFuture = dayOffset > 0;
+    corner.innerHTML = `
+      <span class="win-label">Score</span>
+      <span class="win-nav">
+        <button type="button" class="win-btn" id="winPast" aria-label="Earlier days" ${canPast ? '' : 'disabled'}>◀</button>
+        <button type="button" class="win-btn" id="winNext" aria-label="Later days" ${canFuture ? '' : 'disabled'}>▶</button>
+      </span>`;
+    corner.querySelector('#winPast').onclick = () => shiftDayWindow(1);
+    corner.querySelector('#winNext').onclick = () => shiftDayWindow(-1);
+    names.appendChild(corner);
+
     const canReorder = state.sort === 'manual';
     habits.forEach((h, idx) => {
       const s = strengthOf(h);
@@ -268,37 +289,32 @@
       row.style.setProperty('--hc', h.color);
       row.dataset.id = h.id;
       row.innerHTML = `
-        <button type="button" class="drag" title="Drag to reorder" aria-label="Reorder" ${canReorder ? '' : 'hidden'}>☰</button>
-        <span class="dot" style="background:${h.color}"></span>
-        <span class="label">
-          <span class="nm">${escapeHtml(h.name)}</span>
-          <span class="score"><strong>${s.score}</strong> · ${s.stage}</span>
-        </span>
         <span class="reorder" ${canReorder ? '' : 'hidden'}>
           <button type="button" class="move-up" aria-label="Move up" ${idx === 0 ? 'disabled' : ''}>▲</button>
           <button type="button" class="move-down" aria-label="Move down" ${idx === habits.length - 1 ? 'disabled' : ''}>▼</button>
+        </span>
+        <span class="label">
+          <span class="nm">${escapeHtml(h.name)}</span>
+          <span class="score">${s.score}</span>
         </span>`;
       row.querySelector('.label').onclick = () => openDetail(h.id);
-      row.querySelector('.dot').onclick = () => openDetail(h.id);
       if (canReorder) {
         row.querySelector('.move-up').onclick = (e) => { e.stopPropagation(); moveHabit(h.id, -1); };
         row.querySelector('.move-down').onclick = (e) => { e.stopPropagation(); moveHabit(h.id, 1); };
-        setupDrag(row, h.id);
       }
       names.appendChild(row);
     });
 
-    // day headers
+    // day headers (4 compact columns)
     const heads = el('div', 'day-heads');
     keys.forEach((k) => {
       const d = dateFromKey(k);
       const cell = el('div', 'day-head' + (k === today ? ' today' : ''));
-      cell.innerHTML = `<span class="dow">${DOW_FULL[d.getDay()]}</span><span class="dnum">${d.getDate()}</span>`;
+      cell.innerHTML = `<span class="dow">${DOW_TINY[d.getDay()]}</span><span class="dnum">${d.getDate()}</span>`;
       heads.appendChild(cell);
     });
     track.appendChild(heads);
 
-    // cell rows (data-id keeps them aligned with name reorder)
     habits.forEach((h) => {
       const row = el('div', 'cell-row');
       row.dataset.id = h.id;
@@ -318,16 +334,9 @@
       track.appendChild(row);
     });
 
-    // restore or pin to today
     requestAnimationFrame(() => {
-      if (!scrolledOnce) {
-        days.scrollLeft = days.scrollWidth;
-        scrolledOnce = true;
-      } else {
-        days.scrollLeft = prevLeft;
-        days.scrollTop = prevTop;
-        names.scrollTop = prevTop;
-      }
+      days.scrollTop = prevTop;
+      names.scrollTop = prevTop;
     });
   }
 
@@ -347,49 +356,40 @@
       scrollSyncing = false;
     }, { passive: true });
 
-    // Drag-to-scroll on the day strip (header + cells) — mouse/trackpad friendly.
-    // Touch already native-scrolls; we only activate for mouse/pen.
-    let drag = null;
+    // Horizontal swipe on day columns shifts the 4-day window
+    let swipe = null;
     days.addEventListener('pointerdown', (e) => {
-      if (e.pointerType === 'touch') return;
-      // Don't steal clicks on mark buttons — only empty/header drag, or primary button drag
-      if (e.button !== 0) return;
-      const onMark = e.target.closest && e.target.closest('.mark-cell:not(:disabled)');
-      drag = {
-        id: e.pointerId,
-        x: e.clientX,
-        y: e.clientY,
-        left: days.scrollLeft,
-        top: days.scrollTop,
-        moved: false,
-        onMark: !!onMark,
-      };
+      if (e.button != null && e.button !== 0) return;
+      if (e.target.closest && e.target.closest('.mark-cell:not(:disabled)')) {
+        // allow mark taps; still track lightly for accidental swipes
+      }
+      swipe = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false };
     });
     days.addEventListener('pointermove', (e) => {
-      if (!drag || drag.id !== e.pointerId) return;
-      const dx = e.clientX - drag.x;
-      const dy = e.clientY - drag.y;
-      if (!drag.moved && Math.abs(dx) + Math.abs(dy) < 4) return;
-      // If the gesture started on a mark, only take over once clearly horizontal
-      if (drag.onMark && !drag.moved && Math.abs(dx) < Math.abs(dy)) return;
-      if (drag.onMark && !drag.moved && Math.abs(dx) < 8) return;
-      drag.moved = true;
-      days.setPointerCapture(e.pointerId);
-      days.scrollLeft = drag.left - dx;
-      days.scrollTop = drag.top - dy;
-      e.preventDefault();
+      if (!swipe || swipe.id !== e.pointerId) return;
+      const dx = e.clientX - swipe.x;
+      const dy = e.clientY - swipe.y;
+      if (!swipe.moved && Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+        swipe.moved = true;
+        // finger right → show earlier days
+        if (dx > 0) shiftDayWindow(1);
+        else shiftDayWindow(-1);
+      }
     });
-    const endDrag = (e) => {
-      if (!drag || drag.id !== e.pointerId) return;
-      if (drag.moved) {
-        // Suppress the click that would fire after a drag
-        const suppress = (ev) => { ev.stopPropagation(); ev.preventDefault(); days.removeEventListener('click', suppress, true); };
+    const endSwipe = (e) => {
+      if (!swipe || swipe.id !== e.pointerId) return;
+      if (swipe.moved) {
+        const suppress = (ev) => {
+          ev.stopPropagation();
+          ev.preventDefault();
+          days.removeEventListener('click', suppress, true);
+        };
         days.addEventListener('click', suppress, true);
       }
-      drag = null;
+      swipe = null;
     };
-    days.addEventListener('pointerup', endDrag);
-    days.addEventListener('pointercancel', endDrag);
+    days.addEventListener('pointerup', endSwipe);
+    days.addEventListener('pointercancel', endSwipe);
   }
 
   /** Move habit up (-1) or down (+1). Forces custom sort so order sticks. */
@@ -406,87 +406,6 @@
     state.habits = list;
     save();
     render();
-  }
-
-  /**
-   * Drag reorder without full re-render mid-gesture (that killed pointer capture on mobile).
-   * Reorders name rows + matching cell rows in the DOM, commits order on pointerup.
-   */
-  function setupDrag(nameEl, id) {
-    const handle = nameEl.querySelector('.drag');
-    if (!handle || state.sort !== 'manual') return;
-
-    handle.addEventListener('pointerdown', (e) => {
-      if (e.button != null && e.button !== 0) return;
-      e.preventDefault();
-      e.stopPropagation();
-      dragId = id;
-      nameEl.classList.add('dragging');
-      try { handle.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
-
-      let lastSwapKey = '';
-      const onMove = (ev) => {
-        if (dragId !== id) return;
-        ev.preventDefault();
-        const under = document.elementFromPoint(ev.clientX, ev.clientY);
-        const row = under && under.closest('.name-row');
-        if (!row || row.dataset.id === dragId) return;
-        const before = ev.clientY < row.getBoundingClientRect().top + row.offsetHeight / 2;
-        const swapKey = row.dataset.id + (before ? 'b' : 'a');
-        if (swapKey === lastSwapKey) return;
-        lastSwapKey = swapKey;
-        moveRowInDom(dragId, row.dataset.id, before);
-      };
-      const onUp = (ev) => {
-        nameEl.classList.remove('dragging');
-        try { handle.releasePointerCapture(ev.pointerId); } catch (_) { /* ignore */ }
-        handle.removeEventListener('pointermove', onMove);
-        handle.removeEventListener('pointerup', onUp);
-        handle.removeEventListener('pointercancel', onUp);
-        commitOrderFromDom();
-        dragId = null;
-        render();
-      };
-      handle.addEventListener('pointermove', onMove);
-      handle.addEventListener('pointerup', onUp);
-      handle.addEventListener('pointercancel', onUp);
-    });
-  }
-
-  function moveRowInDom(fromId, toId, before) {
-    const names = $('#colNames');
-    const track = $('#daysTrack');
-    const nameFrom = names.querySelector(`.name-row[data-id="${fromId}"]`);
-    const nameTo = names.querySelector(`.name-row[data-id="${toId}"]`);
-    const cellFrom = track.querySelector(`.cell-row[data-id="${fromId}"]`);
-    const cellTo = track.querySelector(`.cell-row[data-id="${toId}"]`);
-    if (!nameFrom || !nameTo) return;
-    if (before) names.insertBefore(nameFrom, nameTo);
-    else names.insertBefore(nameFrom, nameTo.nextSibling);
-    if (cellFrom && cellTo) {
-      if (before) track.insertBefore(cellFrom, cellTo);
-      else track.insertBefore(cellFrom, cellTo.nextSibling);
-    }
-  }
-
-  function commitOrderFromDom() {
-    const ids = [...$('#colNames').querySelectorAll('.name-row')].map(r => r.dataset.id);
-    const byId = Object.fromEntries(state.habits.map(h => [h.id, h]));
-    const ordered = ids.map((id, i) => {
-      const h = byId[id];
-      if (h) h.order = i;
-      return h;
-    }).filter(Boolean);
-    // keep any orphan habits at end
-    state.habits.forEach((h) => {
-      if (!ids.includes(h.id)) {
-        h.order = ordered.length;
-        ordered.push(h);
-      }
-    });
-    state.habits = ordered;
-    state.sort = 'manual';
-    save();
   }
 
   function toggleCell(h, key) {
@@ -722,7 +641,7 @@
         state.habits.forEach((h, i) => { if (h.order == null) h.order = i; });
         save();
         closeDetail();
-        scrolledOnce = false;
+        dayOffset = 0;
         render();
         toast('Imported');
       } catch (e) {

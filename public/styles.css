@@ -15,10 +15,10 @@
   --radius: 16px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --name-w: 168px;
-  --day-w: 58px;
-  --head-h: 52px;
-  --row-h: 54px;
+  --day-w: 44px;
+  --days-w: calc(var(--day-w) * 4);
+  --head-h: 44px;
+  --row-h: 48px;
 }
 
 :root[data-theme="light"] {
@@ -133,49 +133,48 @@ input, textarea {
   background: var(--bg);
 }
 
-/* ---------- Board: fixed names + scrolling days ---------- */
+/* ---------- Board: wide names + 4 compact day columns ---------- */
 .board {
   flex: 1;
   min-height: 0;
   display: flex;
   overflow: hidden;
   background: var(--bg);
+  padding-bottom: calc(12px + var(--safe-bottom));
 }
 
 .col-names {
-  width: var(--name-w);
-  flex-shrink: 0;
+  flex: 1;
+  min-width: 0;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   background: var(--bg-elev);
   border-right: 1px solid var(--border);
-  box-shadow: 6px 0 16px rgba(0, 0, 0, 0.28);
   z-index: 5;
-  /* hide scrollbar */
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
 .col-names::-webkit-scrollbar { width: 0; height: 0; display: none; }
 
 .col-days {
-  flex: 1;
-  min-width: 0;
-  overflow: auto;
+  flex: 0 0 var(--days-w);
+  width: var(--days-w);
+  min-width: var(--days-w);
+  max-width: var(--days-w);
+  overflow-x: hidden;
+  overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  touch-action: pan-x pan-y;
-  cursor: grab;
-  /* hide scrollbars (still swipeable) */
+  touch-action: pan-y;
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
-.col-days:active { cursor: grabbing; }
 .col-days::-webkit-scrollbar { width: 0; height: 0; display: none; }
 
 .days-track {
+  width: 100%;
   min-height: 100%;
-  padding-bottom: calc(20px + var(--safe-bottom));
 }
 
 /* header cells */
@@ -186,6 +185,36 @@ input, textarea {
   z-index: 6;
   background: var(--bg-elev);
   border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 6px 0 8px;
+  gap: 4px;
+}
+.corner .win-nav {
+  display: flex;
+  gap: 2px;
+}
+.corner .win-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--bg-soft);
+  color: var(--text-soft);
+  font-size: 14px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+}
+.corner .win-btn:active { background: var(--accent); color: #fff; }
+.corner .win-btn:disabled { opacity: 0.3; }
+.corner .win-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .day-heads {
@@ -201,26 +230,27 @@ input, textarea {
   width: var(--day-w);
   min-width: var(--day-w);
   max-width: var(--day-w);
-  flex-shrink: 0;
+  flex: 1 0 var(--day-w);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 1px;
 }
 .day-head .dow {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.2px;
   color: var(--text-faint);
   line-height: 1;
+  text-transform: uppercase;
 }
 .day-head .dnum {
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--text-soft);
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   display: grid;
   place-items: center;
@@ -238,58 +268,33 @@ input, textarea {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 0 4px 0 4px;
+  padding: 0 6px 0 4px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-row);
 }
 .name-row:nth-child(even) { background: var(--bg); }
 .name-row:active { background: var(--bg-soft); }
-.name-row .drag {
-  color: var(--text-faint);
-  font-size: 16px;
-  width: 28px;
-  height: 44px;
-  display: grid;
-  place-items: center;
-  touch-action: none;
-  flex-shrink: 0;
-  opacity: 0.65;
-  cursor: grab;
-  border-radius: 8px;
-}
-.name-row .drag:active { background: var(--bg-soft); opacity: 1; cursor: grabbing; }
-.name-row.dragging {
-  opacity: 0.55;
-  background: var(--bg-soft) !important;
-  z-index: 2;
-}
-.name-row .dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
 .name-row .label {
   flex: 1;
   min-width: 0;
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: baseline;
+  gap: 6px;
   cursor: pointer;
 }
 .name-row .reorder {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   flex-shrink: 0;
 }
 .name-row .reorder button {
-  width: 28px;
-  height: 22px;
-  border-radius: 6px;
+  width: 24px;
+  height: 20px;
+  border-radius: 5px;
   background: var(--bg-soft);
   color: var(--text-soft);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   line-height: 1;
   display: grid;
@@ -297,28 +302,27 @@ input, textarea {
 }
 .name-row .reorder button:active { background: var(--accent); color: #fff; }
 .name-row .reorder button:disabled { opacity: 0.25; }
-.reorder-hint {
-  font-size: 11px;
-  color: var(--text-faint);
-  padding: 6px 10px 0;
-  text-align: center;
-}
 .name-row .nm {
-  font-size: 13px;
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
   font-weight: 600;
-  white-space: nowrap;
+  line-height: 1.25;
+  /* allow up to 2 lines so more of the name shows */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
+  word-break: break-word;
 }
 .name-row .score {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-faint);
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
-}
-.name-row .score strong {
   color: var(--hc, var(--accent));
-  font-weight: 700;
+  min-width: 1.6em;
+  text-align: right;
 }
 
 /* day cells */
@@ -334,8 +338,8 @@ input, textarea {
   width: var(--day-w);
   min-width: var(--day-w);
   max-width: var(--day-w);
+  flex: 1 0 var(--day-w);
   height: var(--row-h);
-  flex-shrink: 0;
   display: grid;
   place-items: center;
   background: transparent;
@@ -352,9 +356,11 @@ input, textarea {
   display: block;
   flex-shrink: 0;
   pointer-events: none;
+  width: 16px;
+  height: 16px;
 }
 .mark-pct {
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--hc, var(--accent));
