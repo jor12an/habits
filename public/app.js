@@ -813,7 +813,19 @@
 
   document.addEventListener('DOMContentLoaded', init);
 
+  // Disable double-tap zoom residual on some iOS versions
+  let lastTouchEnd = 0;
+  document.addEventListener('touchend', (e) => {
+    const now = Date.now();
+    if (now - lastTouchEnd <= 300) e.preventDefault();
+    lastTouchEnd = now;
+  }, { passive: false });
+
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
+        .then((reg) => { try { reg.update(); } catch (_) { /* ignore */ } })
+        .catch(() => {});
+    });
   }
 })();
