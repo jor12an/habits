@@ -66,9 +66,8 @@
   function todayKey(d = new Date()) {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
-  function keyFromOffset(offset) {
-    const d = new Date();
-    d.setHours(12, 0, 0, 0);
+  function keyFromOffset(offset, from = new Date()) {
+    const d = new Date(from.getFullYear(), from.getMonth(), from.getDate(), 12, 0, 0, 0);
     d.setDate(d.getDate() + offset);
     return todayKey(d);
   }
@@ -103,24 +102,31 @@
 
   /**
    * Strength 0–100: recency-weighted performance × maturity (Lally ~66d) × consistency.
+   * asOfKey: evaluate as if "today" were that date (for trend chart).
    */
-  function strengthOf(h) {
-    const today = todayKey();
-    const start = h.created || today;
-    const lookback = Math.min(HISTORY_DAYS, Math.max(0, daysBetween(start, today)));
+  function strengthOf(h, asOfKey = todayKey()) {
+    const asOf = asOfKey || todayKey();
+    const start = h.created || asOf;
+    if (daysBetween(start, asOf) < 0) {
+      return { score: 0, stage: 'New', rate: 0, nSched: 0, nDone: 0 };
+    }
+    const lookback = Math.min(HISTORY_DAYS, Math.max(0, daysBetween(start, asOf)));
     let wSum = 0, wPerf = 0, nSched = 0, nDone = 0, longestMiss = 0, curMiss = 0;
     const lambda = Math.LN2 / HALF_LIFE;
 
     for (let i = lookback; i >= 0; i--) {
-      const k = keyFromOffset(-i);
+      const k = keyFromOffset(-i, dateFromKey(asOf));
       if (daysBetween(start, k) < 0) continue;
+      if (daysBetween(k, asOf) < 0) continue;
       if (!isScheduled(h, k)) continue;
       nSched++;
       const c = completion(h, k) || 0;
       if (c >= 1) { nDone++; curMiss = 0; }
       else if (c > 0) curMiss = 0;
       else { curMiss++; longestMiss = Math.max(longestMiss, curMiss); }
-      const w = Math.exp(-lambda * i);
+      // age relative to asOf (0 = asOf day)
+      const age = daysBetween(k, asOf);
+      const w = Math.exp(-lambda * age);
       wSum += w;
       wPerf += w * c;
     }
@@ -142,6 +148,80 @@
     else if (nSched < 7) stage = 'New';
 
     return { score, stage, rate: recencyRate, nSched, nDone };
+  }
+
+  /** Daily strength score for the last `n` days (oldest → newest). */
+  function scoreSeries(h, n = 60) {
+    const pts = [];
+    const today = todayKey();
+    const start = h.created || today;
+    for (let i = n - 1; i >= 0; i--) {
+      const k = keyFromOffset(-i);
+      if (daysBetween(start, k) < 0) {
+        pts.push({ key: k, score: null });
+        continue;
+      }
+      pts.push({ key: k, score: strengthOf(h, k).score });
+    }
+    return pts;
+  }
+
+  /** Inline SVG line chart of score trend (0–100). */
+  function scoreChartSVG(h, color) {
+    const series = scoreSeries(h, 60);
+    const W = 320, H = 140;
+    const padL = 28, padR = 8, padT = 12, padB = 22;
+    const plotW = W - padL - padR;
+    const plotH = H - padT - padB;
+    const vals = series.map((p) => p.score).filter((v) => v != null);
+    if (vals.length < 2) {
+      return `<div class="chart-empty">Not enough history yet — keep logging to see the trend.</div>`;
+    }
+
+    const xAt = (i) => padL + (i / (series.length - 1)) * plotW;
+    const yAt = (v) => padT + plotH * (1 - v / 100);
+
+    // smooth-ish polyline through known points; hold last known for nulls early
+    let last = vals[0];
+    const coords = series.map((p, i) => {
+      if (p.score != null) last = p.score;
+      return [xAt(i), yAt(last)];
+    });
+    const line = coords.map((c, i) => (i === 0 ? 'M' : 'L') + c[0].toFixed(1) + ',' + c[1].toFixed(1)).join(' ');
+    const area = `${line} L${coords[coords.length - 1][0].toFixed(1)},${(padT + plotH).toFixed(1)} L${coords[0][0].toFixed(1)},${(padT + plotH).toFixed(1)} Z`;
+
+    // grid lines at 0 / 50 / 100
+    const grid = [0, 50, 100].map((v) => {
+      const y = yAt(v);
+      return `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}" class="chart-grid"/>
+        <text x="${padL - 4}" y="${(y + 3).toFixed(1)}" class="chart-axis" text-anchor="end">${v}</text>`;
+    }).join('');
+
+    const firstKey = series[0].key;
+    const lastKey = series[series.length - 1].key;
+    const firstLab = dateFromKey(firstKey).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    const lastLab = dateFromKey(lastKey).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    const cur = series[series.length - 1].score ?? 0;
+    const prev = series[Math.max(0, series.length - 8)].score ?? cur;
+    const delta = cur - prev;
+    const deltaTxt = (delta > 0 ? '+' : '') + delta;
+    const deltaCls = delta > 0 ? 'up' : delta < 0 ? 'down' : 'flat';
+
+    return `
+      <div class="chart-wrap">
+        <div class="chart-meta">
+          <span class="chart-range">Last 60 days</span>
+          <span class="chart-delta ${deltaCls}">${deltaTxt} vs 7d ago</span>
+        </div>
+        <svg class="score-chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Score trend">
+          ${grid}
+          <path d="${area}" fill="${color}" opacity="0.15"/>
+          <path d="${line}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+          <circle cx="${coords[coords.length - 1][0].toFixed(1)}" cy="${coords[coords.length - 1][1].toFixed(1)}" r="4" fill="${color}"/>
+          <text x="${padL}" y="${H - 6}" class="chart-axis">${firstLab}</text>
+          <text x="${W - padR}" y="${H - 6}" class="chart-axis" text-anchor="end">${lastLab}</text>
+        </svg>
+      </div>`;
   }
 
   function streakOf(h) {
@@ -534,6 +614,8 @@
         <div class="sub">Habit strength · recency-weighted · matures over ~${LALLY_DAYS} scheduled days</div>
         <div class="score-bar"><i style="width:${s.score}%;background:${h.color}"></i></div>
       </div>
+      <div class="section-h">Score trend</div>
+      ${scoreChartSVG(h, h.color)}
       <div class="stat-grid">
         <div class="stat-tile"><span class="n">${streakOf(h)}</span><span class="l">Current streak</span></div>
         <div class="stat-tile"><span class="n">${bestStreakOf(h)}</span><span class="l">Best streak</span></div>
@@ -548,6 +630,7 @@
       <p style="font-size:13px;color:var(--text-soft);line-height:1.5;margin:0">
         Recent check-ins count more (half-life ${HALF_LIFE} days). Maturity grows toward automaticity around
         ${LALLY_DAYS} scheduled days (Lally et al., 2010). Long miss streaks lower consistency. Past days are editable.
+        The trend chart replays your strength score day by day over the last 60 days.
       </p>`;
   }
 

@@ -494,6 +494,62 @@ input, textarea {
   height: 100%;
   border-radius: 99px;
 }
+
+/* Score trend chart */
+.chart-wrap {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px 12px 8px;
+  margin-bottom: 14px;
+}
+.chart-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  gap: 8px;
+}
+.chart-range {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-faint);
+}
+.chart-delta {
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.chart-delta.up { color: var(--ok); }
+.chart-delta.down { color: var(--danger); }
+.chart-delta.flat { color: var(--text-faint); }
+.score-chart {
+  width: 100%;
+  height: 140px;
+  display: block;
+}
+.score-chart .chart-grid {
+  stroke: var(--border);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+}
+.score-chart .chart-axis {
+  fill: var(--text-faint);
+  font-size: 10px;
+  font-weight: 600;
+}
+.chart-empty {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 28px 16px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-faint);
+  margin-bottom: 14px;
+  line-height: 1.45;
+}
+
 .stat-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
